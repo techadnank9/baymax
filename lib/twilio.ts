@@ -42,10 +42,9 @@ export async function placeOutboundCallWithResponse(
   const twiml =
     `<Response>` +
     `<Say voice="Polly.Joanna">${escapeXml(message)}</Say>` +
-    `<Gather input="speech" action="${escapeXml(responseWebhookUrl)}" method="POST" speechTimeout="auto" timeout="8">` +
+    `<Gather input="speech" action="${escapeXml(responseWebhookUrl)}" method="POST" speechTimeout="auto" timeout="8" actionOnEmptyResult="true">` +
     `<Say voice="Polly.Joanna">Please say your response after the tone.</Say>` +
     `</Gather>` +
-    `<Say voice="Polly.Joanna">We didn't catch a response. Goodbye.</Say>` +
     `</Response>`;
 
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`, {
