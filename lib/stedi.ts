@@ -10,6 +10,10 @@ export interface EligibilityRequest {
   tradingPartnerServiceId: string;
   provider: { npi: string; organizationName: string };
   subscriber: { memberId: string; firstName: string; lastName: string; dateOfBirth: string };
+  // EQ01 service type code(s) for the 270 -- "30" is "Health Benefit Plan Coverage", the general
+  // catch-all that returns the broadest set of benefits. Pass more specific codes (e.g. "1" =
+  // Medical Care, "88" = Pharmacy) for narrower checks once a specific service type matters.
+  encounter?: { serviceTypeCodes: string[] };
 }
 
 export interface EligibilityResult {
