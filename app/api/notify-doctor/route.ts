@@ -83,9 +83,18 @@ export async function POST(req: Request): Promise<NextResponse> {
     const script = buildScript(
       patientName,
       conditions.map((c) => c.code?.text ?? c.code?.coding?.[0]?.display ?? 'condition'),
-      observations.map(
-        (o) => `${o.code?.text ?? 'observation'} ${o.valueQuantity?.value ?? o.valueString ?? ''}${o.valueQuantity?.unit ?? ''}`
-      ),
+      observations.map((o) => {
+        const label = o.code?.text ?? 'observation';
+        // chartObservation stores free-text symptoms in both code.text and valueString
+        // identically -- don't repeat the same phrase twice when they match.
+        if (o.valueQuantity?.value !== undefined) {
+          return `${label} ${o.valueQuantity.value}${o.valueQuantity.unit ?? ''}`;
+        }
+        if (o.valueString && o.valueString !== label) {
+          return `${label}: ${o.valueString}`;
+        }
+        return label;
+      }),
       allergies.map((a) => a.code?.text ?? a.code?.coding?.[0]?.display ?? 'allergy'),
       differential,
       tasks.map((t) => t.description ?? ''),
