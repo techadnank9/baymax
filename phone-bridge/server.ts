@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY as string;
-const BRIDGE_PORT = Number(process.env.BRIDGE_PORT ?? 8080);
+// Render (and most PaaS) inject PORT and require binding to it; BRIDGE_PORT is the local-dev fallback.
+const BRIDGE_PORT = Number(process.env.PORT ?? process.env.BRIDGE_PORT ?? 8080);
 const AGENT_CONFIG_URL = process.env.AGENT_CONFIG_URL as string; // e.g. https://your-app.vercel.app/api/agent-config
 const APP_BASE_URL = new URL(AGENT_CONFIG_URL).origin;
 const DEEPGRAM_WS_URL = 'wss://agent.deepgram.com/v1/agent/converse';

@@ -8,12 +8,12 @@
     "start": "tsx server.ts"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "tsx": "^4.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.9.0"
   }
 }
