@@ -34,5 +34,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
   }
 
-  return new NextResponse('', { status: 204 });
+  // The Fetch API spec forbids any body -- even an empty string -- on a 204 response; passing
+  // one throws at runtime (this is what caused Twilio to see an HTTP 500 here).
+  return new NextResponse(null, { status: 204 });
 }

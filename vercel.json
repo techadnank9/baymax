@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/keep-phone-bridge-warm",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
