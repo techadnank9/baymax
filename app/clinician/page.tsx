@@ -70,27 +70,33 @@ interface QueueRow {
   patient: Patient;
 }
 
+async function loadQueueRows(medplum: ReturnType<typeof useMedplum>, query: string): Promise<QueueRow[]> {
+  const encounters = await medplum.searchResources('Encounter', query);
+  const rows = await Promise.all(
+    encounters.map(async (encounter) => {
+      const patientRef = encounter.subject?.reference;
+      if (!patientRef) {
+        return null;
+      }
+      const patient = await medplum.readReference({ reference: patientRef } as any).catch(() => null);
+      return patient ? { encounter, patient: patient as Patient } : null;
+    })
+  );
+  return rows.filter((r): r is QueueRow => r !== null);
+}
+
 function PatientQueue(): JSX.Element {
   const medplum = useMedplum();
-  const [queue, setQueue] = useState<QueueRow[] | null>(null);
+  const [active, setActive] = useState<QueueRow[] | null>(null);
+  const [recent, setRecent] = useState<QueueRow[] | null>(null);
 
   const refresh = useCallback(() => {
-    medplum
-      .searchResources('Encounter', 'status=in-progress&_sort=-_lastUpdated&_count=20')
-      .then(async (encounters) => {
-        const rows = await Promise.all(
-          encounters.map(async (encounter) => {
-            const patientRef = encounter.subject?.reference;
-            if (!patientRef) {
-              return null;
-            }
-            const patient = await medplum.readReference({ reference: patientRef } as any).catch(() => null);
-            return patient ? { encounter, patient: patient as Patient } : null;
-          })
-        );
-        setQueue(rows.filter((r): r is QueueRow => r !== null));
-      })
-      .catch((e) => log.error('queue search failed', e));
+    loadQueueRows(medplum, 'status=in-progress&_sort=-_lastUpdated&_count=20')
+      .then(setActive)
+      .catch((e) => log.error('active queue search failed', e));
+    loadQueueRows(medplum, 'status=finished&_sort=-_lastUpdated&_count=10')
+      .then(setRecent)
+      .catch((e) => log.error('recent queue search failed', e));
   }, [medplum]);
 
   useEffect(() => {
@@ -105,17 +111,37 @@ function PatientQueue(): JSX.Element {
       <p style={{ color: '#888' }}>
         No patient selected. Only patients who have completed voice identification appear here.
       </p>
-      {queue === null ? (
+
+      <h2 style={{ marginTop: 24 }}>Active</h2>
+      {active === null ? (
         <p>Loading…</p>
-      ) : queue.length === 0 ? (
+      ) : active.length === 0 ? (
         <p style={{ color: '#888' }}>No active encounters right now.</p>
       ) : (
         <ul>
-          {queue.map(({ encounter, patient }) => (
+          {active.map(({ encounter, patient }) => (
             <li key={encounter.id} style={{ marginBottom: 8 }}>
               <Link href={`/clinician?patientId=${patient.id}`}>
                 {patient.name?.[0]?.given?.[0]} {patient.name?.[0]?.family} — encounter started{' '}
                 {encounter.period?.start ? new Date(encounter.period.start).toLocaleTimeString() : ''}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 style={{ marginTop: 24 }}>Recently completed</h2>
+      {recent === null ? (
+        <p>Loading…</p>
+      ) : recent.length === 0 ? (
+        <p style={{ color: '#888' }}>No completed encounters yet.</p>
+      ) : (
+        <ul>
+          {recent.map(({ encounter, patient }) => (
+            <li key={encounter.id} style={{ marginBottom: 8 }}>
+              <Link href={`/clinician?patientId=${patient.id}`}>
+                {patient.name?.[0]?.given?.[0]} {patient.name?.[0]?.family} — finished{' '}
+                {encounter.period?.end ? new Date(encounter.period.end).toLocaleTimeString() : ''}
               </Link>
             </li>
           ))}
