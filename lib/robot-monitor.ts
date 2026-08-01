@@ -153,9 +153,12 @@ export async function ingestRobotIncident(medplum: MedplumClient, payload: Robot
         payload: [{ contentString: `Critical alert from room monitor: ${finding}` }],
         note: [{ text: '[call in progress]' }],
       });
-      const streamUrl = `${phoneBridgeWssUrl}/stream?mode=doctor&patientId=${patient.id}&communicationId=${communication.id}`;
       try {
-        const result = await placeOutboundAgentCall(doctorPhone, streamUrl);
+        const result = await placeOutboundAgentCall(doctorPhone, `${phoneBridgeWssUrl}/stream`, {
+          mode: 'doctor',
+          patientId: patient.id as string,
+          communicationId: communication.id as string,
+        });
         doctorCallSid = result.sid;
         await medplum.updateResource<Communication>({
           ...communication,

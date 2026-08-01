@@ -30,8 +30,11 @@ export async function notifyDoctorOfCompletedIntake(medplum: MedplumClient, pati
     note: [{ text: '[call in progress]' }],
   });
 
-  const streamUrl = `${phoneBridgeWssUrl}/stream?mode=doctor&patientId=${patientId}&communicationId=${communication.id}`;
-  const result = await placeOutboundAgentCall(doctorPhone, streamUrl);
+  const result = await placeOutboundAgentCall(doctorPhone, `${phoneBridgeWssUrl}/stream`, {
+    mode: 'doctor',
+    patientId,
+    communicationId: communication.id as string,
+  });
   log.info('doctor notification call placed', { sid: result.sid, communicationId: communication.id });
 
   await medplum.updateResource<Communication>({

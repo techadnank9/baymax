@@ -33,10 +33,22 @@ export async function placeOutboundNotificationCall(to: string, message: string)
 // inbound patient call, just Twilio-initiated instead of Twilio-received) -- the phone-bridge then
 // opens a real Deepgram Voice Agent session so the doctor has an actual back-and-forth
 // conversation, not a scripted Say/Gather.
-export async function placeOutboundAgentCall(to: string, streamUrl: string): Promise<{ sid: string }> {
+//
+// NOTE: query strings on <Stream url="..."> are NOT reliably forwarded to the WebSocket upgrade
+// request by Twilio -- confirmed by a live test where they silently vanished. The documented,
+// reliable way to pass custom data is nested <Parameter> tags, delivered in the "start" event's
+// customParameters object once the stream connects. Use that, not the URL, on the receiving end.
+export async function placeOutboundAgentCall(
+  to: string,
+  streamBaseUrl: string,
+  params: Record<string, string>
+): Promise<{ sid: string }> {
   const sid = process.env.TWILIO_ACCOUNT_SID as string;
   const from = process.env.TWILIO_PHONE_NUMBER as string;
-  const twiml = `<Response><Connect><Stream url="${escapeXml(streamUrl)}" /></Connect></Response>`;
+  const paramTags = Object.entries(params)
+    .map(([name, value]) => `<Parameter name="${escapeXml(name)}" value="${escapeXml(value)}" />`)
+    .join('');
+  const twiml = `<Response><Connect><Stream url="${escapeXml(streamBaseUrl)}">${paramTags}</Stream></Connect></Response>`;
 
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`, {
     method: 'POST',

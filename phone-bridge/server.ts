@@ -201,23 +201,18 @@ Routes: <code>/health</code> &middot; <code>/twiml</code> &middot; <code>/stream
 
 const wss = new WebSocketServer({ server: httpServer, path: '/stream' });
 
-wss.on('connection', (twilioWs, req) => {
-  // Twilio passes the <Stream url="wss://host/stream?..."> query string through verbatim on the
-  // WebSocket upgrade request -- this is how an outbound doctor-briefing call tells us who to
-  // brief and where to file the transcript, before the "start" event even arrives.
-  const requestUrl = new URL(req.url ?? '/stream', 'http://placeholder');
-  const mode = requestUrl.searchParams.get('mode') === 'doctor' ? 'doctor' : 'patient';
-  const initialPatientId = requestUrl.searchParams.get('patientId');
-  const communicationId = requestUrl.searchParams.get('communicationId');
-
-  log('twilio', 'connection opened', { mode, patientId: initialPatientId, communicationId });
+wss.on('connection', (twilioWs) => {
+  // Custom data for an outbound doctor-briefing call arrives via <Parameter> tags on the TwiML,
+  // delivered in the "start" event's customParameters -- NOT on the WS connection URL's query
+  // string, which Twilio does not reliably forward (confirmed by a live test where it vanished).
+  log('twilio', 'connection opened');
   let streamSid: string | null = null;
   let dgWs: WebSocket | null = null;
   const state: CallState = {
-    mode,
-    patientId: initialPatientId,
+    mode: 'patient',
+    patientId: null,
     encounterId: null,
-    communicationId,
+    communicationId: null,
     transcript: [],
     ended: false,
   };
@@ -238,10 +233,22 @@ wss.on('connection', (twilioWs, req) => {
 
     if (msg.event === 'start') {
       streamSid = msg.start.streamSid;
-      log('twilio', 'stream started', { streamSid, callSid: msg.start.callSid, mode });
+      const customParams = msg.start.customParameters ?? {};
+      if (customParams.mode === 'doctor') {
+        state.mode = 'doctor';
+        state.patientId = customParams.patientId ?? null;
+        state.communicationId = customParams.communicationId ?? null;
+      }
+      log('twilio', 'stream started', {
+        streamSid,
+        callSid: msg.start.callSid,
+        mode: state.mode,
+        patientId: state.patientId,
+        communicationId: state.communicationId,
+      });
 
       try {
-        const settings = await fetchAgentSettings(mode === 'doctor' ? 'doctor' : null, state.patientId);
+        const settings = await fetchAgentSettings(state.mode === 'doctor' ? 'doctor' : null, state.patientId);
         dgWs = new WebSocket(DEEPGRAM_WS_URL, ['token', DEEPGRAM_API_KEY]);
 
         dgWs.on('open', () => {
