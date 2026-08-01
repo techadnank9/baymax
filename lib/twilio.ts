@@ -41,7 +41,8 @@ export async function placeOutboundNotificationCall(to: string, message: string)
 export async function placeOutboundAgentCall(
   to: string,
   streamBaseUrl: string,
-  params: Record<string, string>
+  params: Record<string, string>,
+  statusCallbackUrl?: string
 ): Promise<{ sid: string }> {
   const sid = process.env.TWILIO_ACCOUNT_SID as string;
   const from = process.env.TWILIO_PHONE_NUMBER as string;
@@ -50,10 +51,21 @@ export async function placeOutboundAgentCall(
     .join('');
   const twiml = `<Response><Connect><Stream url="${escapeXml(streamBaseUrl)}">${paramTags}</Stream></Connect></Response>`;
 
+  const body: Record<string, string> = { To: to, From: from, Twiml: twiml };
+  if (statusCallbackUrl) {
+    // Fires on every status change (queued/ringing/answered/completed); the webhook only acts on
+    // busy/failed/no-answer/canceled -- catches calls that never connect, which otherwise leave
+    // their Communication resource stuck "in-progress" forever (no <Stream> ever runs, so
+    // phone-bridge never gets a chance to post a transcript).
+    body.StatusCallback = statusCallbackUrl;
+    body.StatusCallbackEvent = 'completed';
+    body.StatusCallbackMethod = 'POST';
+  }
+
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`, {
     method: 'POST',
     headers: { Authorization: twilioAuthHeader(), 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ To: to, From: from, Twiml: twiml }),
+    body: new URLSearchParams(body),
   });
   if (!res.ok) {
     throw new Error(`Twilio call failed: HTTP ${res.status} ${await res.text()}`);

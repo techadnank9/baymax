@@ -1,6 +1,6 @@
 import type { MedplumClient } from '@medplum/core';
-import type { Communication, Encounter, Observation, Patient, Task } from '@medplum/fhirtypes';
-import { placeOutboundAgentCall } from './twilio';
+import type { Encounter, Observation, Patient, Task } from '@medplum/fhirtypes';
+import { placeDoctorBriefingCall } from './notify-doctor';
 import { createLogger } from './logger';
 
 const log = createLogger('lib/robot-monitor');
@@ -76,7 +76,6 @@ export interface RobotIncidentResult {
 export async function ingestRobotIncident(medplum: MedplumClient, payload: RobotIncidentPayload): Promise<RobotIncidentResult> {
   const patient = await findOrCreatePatient(medplum, payload);
   const encounter = await findOrCreateActiveEncounter(medplum, patient.id as string);
-  const patientName = `${patient.name?.[0]?.given?.[0] ?? ''} ${patient.name?.[0]?.family ?? ''}`.trim() || 'the patient';
 
   const observationIds: string[] = [];
   const readings = payload.monitorReadings ?? {};
@@ -142,34 +141,18 @@ export async function ingestRobotIncident(medplum: MedplumClient, payload: Robot
     taskId = task.id;
     log.info('critical incident flagged', { taskId, finding });
 
-    const doctorPhone = process.env.DOCTOR_PHONE_NUMBER;
-    const phoneBridgeWssUrl = process.env.PHONE_BRIDGE_WSS_URL;
-    if (doctorPhone && phoneBridgeWssUrl) {
-      const communication = await medplum.createResource<Communication>({
-        resourceType: 'Communication',
-        status: 'in-progress',
-        subject: { reference: `Patient/${patient.id}` },
-        sent: new Date().toISOString(),
-        payload: [{ contentString: `Critical alert from room monitor: ${finding}` }],
-        note: [{ text: '[call in progress]' }],
+    try {
+      const callResult = await placeDoctorBriefingCall(medplum, patient.id as string, {
+        briefingLabel: `Critical alert from room monitor: ${finding}`,
       });
-      try {
-        const result = await placeOutboundAgentCall(doctorPhone, `${phoneBridgeWssUrl}/stream`, {
-          mode: 'doctor',
-          patientId: patient.id as string,
-          communicationId: communication.id as string,
-        });
-        doctorCallSid = result.sid;
-        await medplum.updateResource<Communication>({
-          ...communication,
-          identifier: [{ system: 'https://api.twilio.com/callSid', value: result.sid }],
-        });
-        log.info('critical alert call placed', { sid: result.sid, communicationId: communication.id });
-      } catch (err) {
-        log.error('critical alert call failed', err);
+      if (!callResult.skipped) {
+        doctorCallSid = callResult.callSid;
+        log.info('critical alert call placed', { sid: callResult.callSid, communicationId: callResult.communicationId });
+      } else {
+        log.warn('critical alert call skipped', { reason: callResult.reason });
       }
-    } else {
-      log.warn('DOCTOR_PHONE_NUMBER or PHONE_BRIDGE_WSS_URL not set, skipping critical alert call');
+    } catch (err) {
+      log.error('critical alert call failed', err);
     }
   }
 

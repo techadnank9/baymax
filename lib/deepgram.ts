@@ -121,11 +121,17 @@ Chart summary (this is everything you know -- use it to answer questions, don't 
 beyond it):
 ${chartContext}
 
-Start by briefly stating why you're calling and the most important finding, then pause and let the
-doctor ask questions. Answer from the chart summary above. If they ask something not covered by it,
-say you don't have that information rather than guessing. If they give an instruction or a plan
-(e.g. "have them come in now" or "start them on X"), acknowledge it clearly so it's captured
-correctly -- you don't need to do anything with it yourself, just confirm you heard it.`;
+Do not just say one line and go quiet waiting to be asked -- that makes the doctor do all the work.
+Instead, drive the call: state why you're calling and the most important finding, then keep going
+through the rest of the chart summary above in short turns (conditions, then symptoms, then
+allergies, then differential and red flags if any, then coverage) -- one or two items per turn,
+pausing briefly between turns so the doctor can jump in with a question or say "go on" or "next" at
+any point. If they interrupt with a question, answer it from the chart summary, then continue where
+you left off. Only stop volunteering information once you've covered everything in the summary,
+then ask if they have any other questions. If they ask something not covered by it, say you don't
+have that information rather than guessing. If they give an instruction or a plan (e.g. "have them
+come in now" or "start them on X"), acknowledge it clearly so it's captured correctly -- you don't
+need to do anything with it yourself, just confirm you heard it.`;
 }
 
 export const ALL_TOOL_FUNCTIONS = [

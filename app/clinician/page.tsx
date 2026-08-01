@@ -137,6 +137,7 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
   const [coverages, setCoverages] = useState<Coverage[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [callingDoctor, setCallingDoctor] = useState(false);
+  const [callDoctorNotice, setCallDoctorNotice] = useState<string | null>(null);
 
   const refreshAll = useCallback(() => {
     medplum
@@ -200,6 +201,7 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
 
   async function callDoctor(): Promise<void> {
     setCallingDoctor(true);
+    setCallDoctorNotice(null);
     log.info('calling doctor', { patientId });
     try {
       const res = await fetch('/api/notify-doctor', {
@@ -209,9 +211,13 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
       });
       const result = await res.json();
       log.info('call doctor result', result);
+      if (result.skipped) {
+        setCallDoctorNotice(`Not calling: ${result.reason}.`);
+      }
       refreshAll();
     } catch (err) {
       log.error('call doctor failed', err);
+      setCallDoctorNotice('Call failed to place -- check logs.');
     } finally {
       setCallingDoctor(false);
     }
@@ -243,25 +249,51 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
         <button onClick={callDoctor} disabled={callingDoctor} style={{ padding: '8px 16px' }}>
           {callingDoctor ? 'Calling…' : 'Call Doctor'}
         </button>
+        {callDoctorNotice && <p style={{ fontSize: 13, color: '#b91c1c', marginTop: 6 }}>{callDoctorNotice}</p>}
       </div>
 
       {communications.length > 0 && (
         <section style={{ marginTop: 16 }}>
           <h2>Doctor Call</h2>
-          {communications.map((c) => (
-            <div key={c.id} style={{ background: '#f7f7f7', padding: 12, borderRadius: 6, marginBottom: 8 }}>
-              <p style={{ fontSize: 13, color: '#888', margin: '0 0 6px' }}>
-                {c.sent ? new Date(c.sent).toLocaleTimeString() : ''} — <strong>{c.status}</strong>
-              </p>
-              <p style={{ fontSize: 13, margin: '0 0 6px' }}>
-                <strong>What was said to the doctor:</strong> {c.payload?.[0]?.contentString}
-              </p>
-              <p style={{ fontSize: 13, margin: 0 }}>
-                <strong>Doctor's response:</strong>{' '}
-                {c.status === 'completed' ? c.note?.[0]?.text : 'Waiting for response…'}
-              </p>
-            </div>
-          ))}
+          {communications.map((c) => {
+            const briefing = c.payload?.[0]?.contentString;
+            const fullTranscript = c.payload
+              ?.slice(1)
+              .map((p) => p.contentString)
+              .find((t) => t?.startsWith('Full transcript:'));
+            return (
+              <div key={c.id} style={{ background: '#f7f7f7', padding: 12, borderRadius: 6, marginBottom: 8 }}>
+                <p style={{ fontSize: 13, color: '#888', margin: '0 0 6px' }}>
+                  {c.sent ? new Date(c.sent).toLocaleTimeString() : ''} — <strong>{c.status}</strong>
+                </p>
+                <p style={{ fontSize: 13, margin: '0 0 6px' }}>
+                  <strong>Chart briefed:</strong> {briefing}
+                </p>
+                {fullTranscript ? (
+                  <div>
+                    <strong style={{ fontSize: 13 }}>Full call transcript:</strong>
+                    <pre
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        fontSize: 13,
+                        background: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 6,
+                        padding: 10,
+                        marginTop: 4,
+                      }}
+                    >
+                      {fullTranscript.replace('Full transcript:\n', '')}
+                    </pre>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, margin: 0 }}>
+                    {c.status === 'completed' ? c.note?.[0]?.text : 'Call in progress…'}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
 

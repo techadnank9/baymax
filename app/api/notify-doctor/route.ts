@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedMedplumClient } from '@/lib/medplum';
-import { notifyDoctorOfCompletedIntake } from '@/lib/notify-doctor';
+import { placeDoctorBriefingCall } from '@/lib/notify-doctor';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('api/notify-doctor');
@@ -15,8 +15,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   try {
     const medplum = await getAuthenticatedMedplumClient();
-    await notifyDoctorOfCompletedIntake(medplum, patientId);
-    return NextResponse.json({ ok: true });
+    const result = await placeDoctorBriefingCall(medplum, patientId);
+    return NextResponse.json(result);
   } catch (err) {
     log.error('failed', err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
