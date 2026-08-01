@@ -137,7 +137,27 @@ async function handleFunctionCallRequest(msg: any, dgWs: WebSocket, state: CallS
   }
 }
 
+const START_TIME = Date.now();
+
 const httpServer = createServer((req, res) => {
+  if (req.url === '/' || req.url === '') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const uptimeSec = Math.floor((Date.now() - START_TIME) / 1000);
+    res.end(`<!doctype html>
+<html><head><title>Agentic Intake — phone-bridge</title>
+<style>body{font-family:system-ui,sans-serif;background:#ecfeff;color:#164e63;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+.card{background:#fff;border:1px solid #a5f3fc;border-radius:12px;padding:32px 40px;text-align:center}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#059669;margin-right:8px}
+code{background:#f0fdfa;padding:2px 6px;border-radius:4px}</style></head>
+<body><div class="card">
+<h1><span class="dot"></span>phone-bridge is running</h1>
+<p>Twilio &lt;-&gt; Deepgram Voice Agent relay for Agentic Intake.</p>
+<p>Uptime: ${uptimeSec}s</p>
+<p>This is a backend webhook service, not a user-facing page.<br/>
+Routes: <code>/health</code> &middot; <code>/twiml</code> &middot; <code>/stream</code> (WebSocket)</p>
+</div></body></html>`);
+    return;
+  }
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
