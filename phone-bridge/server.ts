@@ -25,8 +25,15 @@ const TOOL_ROUTES: Record<string, string> = {
   flagRedFlag: '/api/tools/flag-red-flag',
 };
 
-async function fetchAgentSettings(): Promise<any> {
-  const res = await fetch(`${APP_BASE_URL}/api/agent-config?encoding=mulaw`);
+async function fetchAgentSettings(mode: string | null, patientId: string | null): Promise<any> {
+  const params = new URLSearchParams({ encoding: 'mulaw' });
+  if (mode) {
+    params.set('mode', mode);
+  }
+  if (patientId) {
+    params.set('patientId', patientId);
+  }
+  const res = await fetch(`${APP_BASE_URL}/api/agent-config?${params.toString()}`);
   const data = await res.json();
   return data.settings;
 }
@@ -42,12 +49,15 @@ async function startEncounter(patientId: string): Promise<string> {
 }
 
 interface CallState {
+  mode: 'patient' | 'doctor';
   patientId: string | null;
   encounterId: string | null;
+  communicationId: string | null;
+  transcript: { role: string; content: string }[];
   ended: boolean;
 }
 
-function endEncounter(state: CallState): void {
+function endPatientEncounter(state: CallState): void {
   if (state.ended || !state.encounterId) {
     return;
   }
@@ -59,6 +69,20 @@ function endEncounter(state: CallState): void {
   })
     .then(() => log('encounter', 'ended', { encounterId: state.encounterId }))
     .catch((err) => log('encounter', 'failed to end', err));
+}
+
+function endDoctorCall(state: CallState): void {
+  if (state.ended || !state.communicationId) {
+    return;
+  }
+  state.ended = true;
+  fetch(`${APP_BASE_URL}/api/twilio/doctor-call-transcript`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ communicationId: state.communicationId, transcript: state.transcript }),
+  })
+    .then(() => log('doctor-call', 'transcript posted', { communicationId: state.communicationId, turns: state.transcript.length }))
+    .catch((err) => log('doctor-call', 'failed to post transcript', err));
 }
 
 async function handleFunctionCallRequest(msg: any, dgWs: WebSocket, state: CallState): Promise<void> {
@@ -177,11 +201,26 @@ Routes: <code>/health</code> &middot; <code>/twiml</code> &middot; <code>/stream
 
 const wss = new WebSocketServer({ server: httpServer, path: '/stream' });
 
-wss.on('connection', (twilioWs) => {
-  log('twilio', 'connection opened');
+wss.on('connection', (twilioWs, req) => {
+  // Twilio passes the <Stream url="wss://host/stream?..."> query string through verbatim on the
+  // WebSocket upgrade request -- this is how an outbound doctor-briefing call tells us who to
+  // brief and where to file the transcript, before the "start" event even arrives.
+  const requestUrl = new URL(req.url ?? '/stream', 'http://placeholder');
+  const mode = requestUrl.searchParams.get('mode') === 'doctor' ? 'doctor' : 'patient';
+  const initialPatientId = requestUrl.searchParams.get('patientId');
+  const communicationId = requestUrl.searchParams.get('communicationId');
+
+  log('twilio', 'connection opened', { mode, patientId: initialPatientId, communicationId });
   let streamSid: string | null = null;
   let dgWs: WebSocket | null = null;
-  const state: CallState = { patientId: null, encounterId: null, ended: false };
+  const state: CallState = {
+    mode,
+    patientId: initialPatientId,
+    encounterId: null,
+    communicationId,
+    transcript: [],
+    ended: false,
+  };
 
   twilioWs.on('message', async (raw) => {
     let msg: any;
@@ -199,10 +238,10 @@ wss.on('connection', (twilioWs) => {
 
     if (msg.event === 'start') {
       streamSid = msg.start.streamSid;
-      log('twilio', 'stream started', { streamSid, callSid: msg.start.callSid });
+      log('twilio', 'stream started', { streamSid, callSid: msg.start.callSid, mode });
 
       try {
-        const settings = await fetchAgentSettings();
+        const settings = await fetchAgentSettings(mode === 'doctor' ? 'doctor' : null, state.patientId);
         dgWs = new WebSocket(DEEPGRAM_WS_URL, ['token', DEEPGRAM_API_KEY]);
 
         dgWs.on('open', () => {
@@ -233,6 +272,9 @@ wss.on('connection', (twilioWs) => {
               }
             } else if (dgMsg.type === 'ConversationText') {
               log('transcript', `[${dgMsg.role}] ${dgMsg.content}`);
+              if (state.mode === 'doctor' && (dgMsg.role === 'user' || dgMsg.role === 'assistant')) {
+                state.transcript.push({ role: dgMsg.role, content: dgMsg.content });
+              }
             } else if (dgMsg.type === 'Error') {
               log('deepgram', 'error message', dgMsg);
             }
@@ -268,7 +310,11 @@ wss.on('connection', (twilioWs) => {
     if (msg.event === 'stop') {
       log('twilio', 'stream stopped');
       dgWs?.close();
-      endEncounter(state);
+      if (state.mode === 'doctor') {
+        endDoctorCall(state);
+      } else {
+        endPatientEncounter(state);
+      }
       return;
     }
   });
@@ -276,7 +322,11 @@ wss.on('connection', (twilioWs) => {
   twilioWs.on('close', () => {
     log('twilio', 'connection closed');
     dgWs?.close();
-    endEncounter(state);
+    if (state.mode === 'doctor') {
+      endDoctorCall(state);
+    } else {
+      endPatientEncounter(state);
+    }
   });
 
   twilioWs.on('error', (err) => log('twilio', 'websocket error', err));

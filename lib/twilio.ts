@@ -29,23 +29,14 @@ export async function placeOutboundNotificationCall(to: string, message: string)
   return { sid: data.sid };
 }
 
-// Speaks `message`, then records the doctor's spoken reply and POSTs it (as SpeechResult) to
-// `responseWebhookUrl` once they finish talking (or after a pause). Requires a publicly
-// reachable webhook -- Twilio must be able to reach it from the internet.
-export async function placeOutboundCallWithResponse(
-  to: string,
-  message: string,
-  responseWebhookUrl: string
-): Promise<{ sid: string }> {
+// Places a call and connects its audio to the phone-bridge's Media Stream (same mechanism as an
+// inbound patient call, just Twilio-initiated instead of Twilio-received) -- the phone-bridge then
+// opens a real Deepgram Voice Agent session so the doctor has an actual back-and-forth
+// conversation, not a scripted Say/Gather.
+export async function placeOutboundAgentCall(to: string, streamUrl: string): Promise<{ sid: string }> {
   const sid = process.env.TWILIO_ACCOUNT_SID as string;
   const from = process.env.TWILIO_PHONE_NUMBER as string;
-  const twiml =
-    `<Response>` +
-    `<Say voice="Polly.Joanna">${escapeXml(message)}</Say>` +
-    `<Gather input="speech" action="${escapeXml(responseWebhookUrl)}" method="POST" speechTimeout="auto" timeout="8" actionOnEmptyResult="true">` +
-    `<Say voice="Polly.Joanna">Please say your response after the tone.</Say>` +
-    `</Gather>` +
-    `</Response>`;
+  const twiml = `<Response><Connect><Stream url="${escapeXml(streamUrl)}" /></Connect></Response>`;
 
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`, {
     method: 'POST',

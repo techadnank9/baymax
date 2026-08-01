@@ -1,6 +1,6 @@
 import type { MedplumClient } from '@medplum/core';
-import type { Encounter, Observation, Patient, Task } from '@medplum/fhirtypes';
-import { placeOutboundNotificationCall } from './twilio';
+import type { Communication, Encounter, Observation, Patient, Task } from '@medplum/fhirtypes';
+import { placeOutboundAgentCall } from './twilio';
 import { createLogger } from './logger';
 
 const log = createLogger('lib/robot-monitor');
@@ -143,17 +143,30 @@ export async function ingestRobotIncident(medplum: MedplumClient, payload: Robot
     log.info('critical incident flagged', { taskId, finding });
 
     const doctorPhone = process.env.DOCTOR_PHONE_NUMBER;
-    if (doctorPhone) {
-      const message = payload.simulationOnly
-        ? `This is a simulated critical alert, no real patient. Room ${payload.roomId}, patient ${patientName}. ${finding}.`
-        : `Critical alert. Room ${payload.roomId}, patient ${patientName}. ${finding}. Please respond immediately.`;
+    const phoneBridgeWssUrl = process.env.PHONE_BRIDGE_WSS_URL;
+    if (doctorPhone && phoneBridgeWssUrl) {
+      const communication = await medplum.createResource<Communication>({
+        resourceType: 'Communication',
+        status: 'in-progress',
+        subject: { reference: `Patient/${patient.id}` },
+        sent: new Date().toISOString(),
+        payload: [{ contentString: `Critical alert from room monitor: ${finding}` }],
+        note: [{ text: '[call in progress]' }],
+      });
+      const streamUrl = `${phoneBridgeWssUrl}/stream?mode=doctor&patientId=${patient.id}&communicationId=${communication.id}`;
       try {
-        const result = await placeOutboundNotificationCall(doctorPhone, message);
+        const result = await placeOutboundAgentCall(doctorPhone, streamUrl);
         doctorCallSid = result.sid;
-        log.info('critical alert call placed', { sid: result.sid });
+        await medplum.updateResource<Communication>({
+          ...communication,
+          identifier: [{ system: 'https://api.twilio.com/callSid', value: result.sid }],
+        });
+        log.info('critical alert call placed', { sid: result.sid, communicationId: communication.id });
       } catch (err) {
         log.error('critical alert call failed', err);
       }
+    } else {
+      log.warn('DOCTOR_PHONE_NUMBER or PHONE_BRIDGE_WSS_URL not set, skipping critical alert call');
     }
   }
 

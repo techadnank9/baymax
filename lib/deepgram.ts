@@ -106,6 +106,28 @@ export const FLAG_RED_FLAG_FUNCTION = {
   },
 };
 
+// Doctor-briefing mode: same voice-agent tech as patient intake, but a completely different
+// persona and no charting tools -- the chart is already known (passed in as text) and this call's
+// only job is to converse about it, answer the doctor's questions, and relay anything they say.
+export function buildDoctorBriefingPrompt(patientName: string, chartContext: string): string {
+  return `You are calling a doctor on behalf of the clinic to brief them about a patient. You are
+NOT the doctor, you are the clinic's assistant relaying information and answering questions from
+the chart. Speak naturally and conversationally -- short turns (1-2 sentences), like a real phone
+call, not a monologue.
+
+Patient: ${patientName}
+
+Chart summary (this is everything you know -- use it to answer questions, don't invent anything
+beyond it):
+${chartContext}
+
+Start by briefly stating why you're calling and the most important finding, then pause and let the
+doctor ask questions. Answer from the chart summary above. If they ask something not covered by it,
+say you don't have that information rather than guessing. If they give an instruction or a plan
+(e.g. "have them come in now" or "start them on X"), acknowledge it clearly so it's captured
+correctly -- you don't need to do anything with it yourself, just confirm you heard it.`;
+}
+
 export const ALL_TOOL_FUNCTIONS = [
   IDENTIFY_PATIENT_FUNCTION,
   CHART_OBSERVATION_FUNCTION,

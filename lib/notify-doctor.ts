@@ -1,48 +1,41 @@
 import type { MedplumClient } from '@medplum/core';
-import { DIFFERENTIAL_ITEMS_EXTENSION_URL, type DifferentialItem } from './fhir-writes';
-import { placeOutboundNotificationCall } from './twilio';
+import type { Communication } from '@medplum/fhirtypes';
+import { placeOutboundAgentCall } from './twilio';
+import { chartContextToText, gatherChartContext } from './chart-context';
 import { createLogger } from './logger';
 
 const log = createLogger('lib/notify-doctor');
 
+// Places a real conversational call to the on-call doctor -- connects to the same Deepgram Voice
+// Agent tech as patient intake (via the phone-bridge), grounded in the patient's full chart, so
+// the doctor can actually ask questions rather than just hear a one-way script.
 export async function notifyDoctorOfCompletedIntake(medplum: MedplumClient, patientId: string): Promise<void> {
   const doctorPhone = process.env.DOCTOR_PHONE_NUMBER;
-  if (!doctorPhone) {
-    log.warn('DOCTOR_PHONE_NUMBER not set, skipping notification call');
+  const phoneBridgeWssUrl = process.env.PHONE_BRIDGE_WSS_URL;
+  if (!doctorPhone || !phoneBridgeWssUrl) {
+    log.warn('DOCTOR_PHONE_NUMBER or PHONE_BRIDGE_WSS_URL not set, skipping notification call');
     return;
   }
 
-  const patient = await medplum.readResource('Patient', patientId);
-  const patientName = `${patient.name?.[0]?.given?.[0] ?? ''} ${patient.name?.[0]?.family ?? ''}`.trim() || 'a patient';
+  const ctx = await gatherChartContext(medplum, patientId);
+  const briefingText = chartContextToText(ctx);
+  log.info('notifying doctor', { patientName: ctx.patientName, urgent: ctx.redFlags.length > 0 });
 
-  const [impressions, tasks] = await Promise.all([
-    medplum.searchResources('ClinicalImpression', `subject=Patient/${patientId}&_sort=-_lastUpdated&_count=1`),
-    medplum.searchResources('Task', `patient=Patient/${patientId}&status=requested`),
-  ]);
+  const communication = await medplum.createResource<Communication>({
+    resourceType: 'Communication',
+    status: 'in-progress',
+    subject: { reference: `Patient/${patientId}` },
+    sent: new Date().toISOString(),
+    payload: [{ contentString: briefingText }],
+    note: [{ text: '[call in progress]' }],
+  });
 
-  const ext = impressions[0]?.extension?.find((e) => e.url === DIFFERENTIAL_ITEMS_EXTENSION_URL);
-  let topCondition: DifferentialItem | undefined;
-  if (ext?.valueString) {
-    try {
-      const items = JSON.parse(ext.valueString) as DifferentialItem[];
-      topCondition = items[0];
-    } catch {
-      // ignore parse errors, fall through with no condition
-    }
-  }
+  const streamUrl = `${phoneBridgeWssUrl}/stream?mode=doctor&patientId=${patientId}&communicationId=${communication.id}`;
+  const result = await placeOutboundAgentCall(doctorPhone, streamUrl);
+  log.info('doctor notification call placed', { sid: result.sid, communicationId: communication.id });
 
-  const urgent = tasks.length > 0;
-  const findingText = urgent
-    ? tasks.map((t) => t.description).join('. ')
-    : topCondition
-      ? `${topCondition.condition}, ${topCondition.likelihood} likelihood`
-      : 'symptoms recorded during intake';
-
-  const message = urgent
-    ? `Hi Doctor, this is calling regarding ${patientName}, who just finished intake with an urgent finding: ${findingText}. Please come see them urgently.`
-    : `Hi Doctor, this is calling regarding ${patientName}, who just finished intake. Top consideration: ${findingText}. Please review at their scheduled appointment time.`;
-
-  log.info('notifying doctor', { patientName, urgent, message });
-  const result = await placeOutboundNotificationCall(doctorPhone, message);
-  log.info('doctor notification call placed', { sid: result.sid });
+  await medplum.updateResource<Communication>({
+    ...communication,
+    identifier: [{ system: 'https://api.twilio.com/callSid', value: result.sid }],
+  });
 }
