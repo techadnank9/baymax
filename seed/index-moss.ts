@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   console.log(`Indexing ${docs.length} documents for patient ${patientId}...`);
   docs.forEach((d) => console.log(' -', d.text));
 
-  const moss = getMossClient();
+  const moss = await getMossClient();
   const indexName = historyIndexName(patientId);
   await moss.createIndex(indexName, docs, {
     onProgress: (p) => console.log(`  ${p.status} ${p.progress}%`),

@@ -15,7 +15,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   try {
-    const moss = getMossClient();
+    const moss = await getMossClient();
     const index = historyIndexName(patientId);
     // moss's cloud /query endpoint has been unreliable (503s) even when the index is Ready;
     // loadIndex() + local in-memory query avoids that round-trip entirely.
