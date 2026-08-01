@@ -1,0 +1,32 @@
+{
+  "patients": [
+    {
+      "firstName": "John",
+      "lastName": "Doe",
+      "dateOfBirth": "1990-05-14",
+      "gender": "male",
+      "phone": "+15551234567",
+      "conditions": [
+        { "name": "Type 2 diabetes mellitus", "diagnosedDate": "2020-01-10" },
+        { "name": "Essential hypertension", "diagnosedDate": "2021-03-15" }
+      ],
+      "observations": [
+        { "name": "Hemoglobin A1c", "value": 7.8, "unit": "%", "date": "2026-05-01" },
+        { "name": "Blood pressure", "value": "138/86", "date": "2026-05-01" }
+      ],
+      "allergies": [
+        { "substance": "Penicillin", "reaction": "Rash", "severity": "moderate" }
+      ]
+    },
+    {
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "dateOfBirth": "1985-11-02",
+      "gender": "female",
+      "phone": "+15559876543",
+      "conditions": [{ "name": "Asthma", "diagnosedDate": "2015-06-20" }],
+      "observations": [],
+      "allergies": [{ "substance": "Latex", "reaction": "Hives", "severity": "mild" }]
+    }
+  ]
+}
