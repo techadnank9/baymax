@@ -120,16 +120,16 @@ export async function ingestRobotIncident(medplum: MedplumClient, payload: Robot
   let doctorCallSid: string | undefined;
   const isCritical = payload.severity === 'critical' || readings.alarm === 'critical';
 
-  if (isCritical) {
-    const finding = [
-      `${payload.incidentType} in room ${payload.roomId}`,
-      readings.heartRateBpm !== undefined ? `HR ${readings.heartRateBpm} bpm` : '',
-      readings.spo2Percent !== undefined ? `SpO2 ${readings.spo2Percent}%` : '',
-      payload.patientSpeech?.transcript ? `Patient said: "${payload.patientSpeech.transcript}"` : '',
-    ]
-      .filter(Boolean)
-      .join(', ');
+  const finding = [
+    `${payload.incidentType} in room ${payload.roomId}`,
+    readings.heartRateBpm !== undefined ? `HR ${readings.heartRateBpm} bpm` : '',
+    readings.spo2Percent !== undefined ? `SpO2 ${readings.spo2Percent}%` : '',
+    payload.patientSpeech?.transcript ? `Patient said: "${payload.patientSpeech.transcript}"` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
 
+  if (isCritical) {
     const task = await medplum.createResource<Task>({
       resourceType: 'Task',
       status: 'requested',
@@ -140,20 +140,25 @@ export async function ingestRobotIncident(medplum: MedplumClient, payload: Robot
     });
     taskId = task.id;
     log.info('critical incident flagged', { taskId, finding });
+  }
 
-    try {
-      const callResult = await placeDoctorBriefingCall(medplum, patient.id as string, {
-        briefingLabel: `Critical alert from room monitor: ${finding}`,
-      });
-      if (!callResult.skipped) {
-        doctorCallSid = callResult.callSid;
-        log.info('critical alert call placed', { sid: callResult.callSid, communicationId: callResult.communicationId });
-      } else {
-        log.warn('critical alert call skipped', { reason: callResult.reason });
-      }
-    } catch (err) {
-      log.error('critical alert call failed', err);
+  // Every robot event calls the doctor, not just critical ones -- placeDoctorBriefingCall's
+  // built-in dedup guard (2-minute window) prevents this from spamming if the robot posts
+  // frequently for the same patient.
+  try {
+    const callResult = await placeDoctorBriefingCall(medplum, patient.id as string, {
+      briefingLabel: isCritical
+        ? `Critical alert from room monitor: ${finding}`
+        : `Update from room monitor: ${finding}`,
+    });
+    if (!callResult.skipped) {
+      doctorCallSid = callResult.callSid;
+      log.info('doctor call placed', { sid: callResult.callSid, communicationId: callResult.communicationId, isCritical });
+    } else {
+      log.warn('doctor call skipped', { reason: callResult.reason });
     }
+  } catch (err) {
+    log.error('doctor call failed', err);
   }
 
   return {
