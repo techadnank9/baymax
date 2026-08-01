@@ -4,6 +4,7 @@ import { PatientHeader, useMedplum } from '@medplum/react';
 import type {
   AllergyIntolerance,
   ClinicalImpression,
+  Communication,
   Condition,
   Coverage,
   Encounter,
@@ -134,6 +135,8 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [impressions, setImpressions] = useState<ClinicalImpression[]>([]);
   const [coverages, setCoverages] = useState<Coverage[]>([]);
+  const [communications, setCommunications] = useState<Communication[]>([]);
+  const [callingDoctor, setCallingDoctor] = useState(false);
 
   const refreshAll = useCallback(() => {
     medplum
@@ -167,6 +170,10 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
       .searchResources('Coverage', `beneficiary=Patient/${patientId}`)
       .then((r) => setCoverages([...r]))
       .catch((e) => log.error('search Coverage failed', e));
+    medplum
+      .searchResources('Communication', `subject=Patient/${patientId}&_sort=-_lastUpdated`)
+      .then((r) => setCommunications([...r]))
+      .catch((e) => log.error('search Communication failed', e));
   }, [medplum, patientId]);
 
   useEffect(() => {
@@ -191,6 +198,25 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
     }
   }
 
+  async function callDoctor(): Promise<void> {
+    setCallingDoctor(true);
+    log.info('calling doctor', { patientId });
+    try {
+      const res = await fetch('/api/notify-doctor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId }),
+      });
+      const result = await res.json();
+      log.info('call doctor result', result);
+      refreshAll();
+    } catch (err) {
+      log.error('call doctor failed', err);
+    } finally {
+      setCallingDoctor(false);
+    }
+  }
+
   if (notFound) {
     return (
       <div style={{ padding: 24 }}>
@@ -212,6 +238,32 @@ function PatientChart({ patientId }: { patientId: string }): JSX.Element {
       <div style={{ marginTop: 12 }}>
         <PatientHeader patient={patient} />
       </div>
+
+      <div style={{ marginTop: 16 }}>
+        <button onClick={callDoctor} disabled={callingDoctor} style={{ padding: '8px 16px' }}>
+          {callingDoctor ? 'Calling…' : 'Call Doctor'}
+        </button>
+      </div>
+
+      {communications.length > 0 && (
+        <section style={{ marginTop: 16 }}>
+          <h2>Doctor Call</h2>
+          {communications.map((c) => (
+            <div key={c.id} style={{ background: '#f7f7f7', padding: 12, borderRadius: 6, marginBottom: 8 }}>
+              <p style={{ fontSize: 13, color: '#888', margin: '0 0 6px' }}>
+                {c.sent ? new Date(c.sent).toLocaleTimeString() : ''} — <strong>{c.status}</strong>
+              </p>
+              <p style={{ fontSize: 13, margin: '0 0 6px' }}>
+                <strong>What was said to the doctor:</strong> {c.payload?.[0]?.contentString}
+              </p>
+              <p style={{ fontSize: 13, margin: 0 }}>
+                <strong>Doctor's response:</strong>{' '}
+                {c.status === 'completed' ? c.note?.[0]?.text : 'Waiting for response…'}
+              </p>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section style={{ marginTop: 24 }}>
         <h2>Problem List</h2>
