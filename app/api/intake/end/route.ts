@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedMedplumClient } from '@/lib/medplum';
+import { notifyDoctorOfCompletedIntake } from '@/lib/notify-doctor';
 import { createLogger } from '@/lib/logger';
 import type { Encounter } from '@medplum/fhirtypes';
 
@@ -22,6 +23,14 @@ export async function POST(req: Request): Promise<NextResponse> {
       period: { ...encounter.period, end: new Date().toISOString() },
     });
     log.info('encounter finished', { id: updated.id });
+
+    const patientId = encounter.subject?.reference?.split('/')[1];
+    if (patientId) {
+      notifyDoctorOfCompletedIntake(medplum, patientId).catch((err) =>
+        log.error('doctor notification failed (non-blocking)', err)
+      );
+    }
+
     return NextResponse.json({ id: updated.id, status: updated.status });
   } catch (err) {
     log.error('failed', err);
