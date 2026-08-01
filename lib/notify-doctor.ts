@@ -6,12 +6,20 @@ import { createLogger } from './logger';
 
 const log = createLogger('lib/notify-doctor');
 
+// A call genuinely can't take longer than this to at least connect and get a first response --
+// anything older than this that's still "in-progress" means something failed silently (busy
+// signal that dodged the status callback, cold-start timeout, crashed phone-bridge, etc.) and
+// should no longer block a new call for the same patient.
+const STUCK_CALL_TIMEOUT_MS = 2 * 60 * 1000;
+
 // Places a real conversational call to the on-call doctor -- connects to the same Deepgram Voice
 // Agent tech as patient intake (via the phone-bridge), grounded in the patient's full chart, so
 // the doctor can actually ask questions rather than just hear a one-way script.
 //
-// Guards against double-dialing: if a call for this patient is already in progress, skips instead
-// of placing a second call (which just hits a busy signal and gets stuck with no way to complete).
+// Guards against double-dialing: if a call for this patient started less than 2 minutes ago and is
+// still in progress, skips (a second call right now would just hit a busy signal). If that call
+// is older than 2 minutes, it's treated as failed/abandoned -- marked completed with a timeout
+// note -- and a new call is placed instead of blocking forever.
 export async function placeDoctorBriefingCall(
   medplum: MedplumClient,
   patientId: string,
@@ -26,9 +34,18 @@ export async function placeDoctorBriefingCall(
   }
 
   const existing = await medplum.searchResources('Communication', `subject=Patient/${patientId}&status=in-progress`);
-  if (existing.length > 0) {
-    log.warn('a doctor call is already in progress for this patient, skipping', { existingId: existing[0].id });
-    return { skipped: true, reason: 'call already in progress' };
+  for (const stale of existing) {
+    const ageMs = Date.now() - new Date(stale.sent ?? stale.meta?.lastUpdated ?? 0).getTime();
+    if (ageMs < STUCK_CALL_TIMEOUT_MS) {
+      log.warn('a doctor call is already in progress for this patient, skipping', { existingId: stale.id, ageMs });
+      return { skipped: true, reason: 'call already in progress' };
+    }
+    log.warn('found a stale in-progress call, marking it timed out', { staleId: stale.id, ageMs });
+    await medplum.updateResource<Communication>({
+      ...stale,
+      status: 'completed',
+      note: [{ text: '[call timed out -- no response within 2 minutes, likely never connected]' }],
+    });
   }
 
   const ctx = opts.ctx ?? (await gatherChartContext(medplum, patientId));
