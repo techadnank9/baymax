@@ -2,19 +2,24 @@
 
 # Baymax
 
-**A robot that walks the floor and listens, a system that charts it to FHIR, thinks it through, and gets the doctor on the phone before anyone reaches the bedside.**
+**Pre-visit briefing**<br />
+A voice agent that charts intake straight to FHIR, thinks through a differential, and gets the doctor on the phone.<br />
+An agentic healthcare build powered by Deepgram, Medplum, moss.dev, and Stedi.
 
-[![Live app](https://img.shields.io/badge/live-baymax--jet.vercel.app-0891b2?style=for-the-badge)](https://baymax-jet.vercel.app)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue?style=for-the-badge)](LICENSE.txt)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![FHIR R4](https://img.shields.io/badge/FHIR-R4-005EB8?style=for-the-badge)](https://www.medplum.com)
+[![GitHub stars](https://img.shields.io/github/stars/techadnank9/baymax?style=for-the-badge&color=14b8a6)](https://github.com/techadnank9/baymax/stargazers)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-3776AB?style=for-the-badge)](LICENSE.txt)
+![Next.js 15](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge)
+![FHIR R4](https://img.shields.io/badge/FHIR-R4-0f766e?style=for-the-badge)
 
-Built for the **YC × Medplum Agentic Healthcare Hackathon**
-
-[Try the voice intake](https://baymax-jet.vercel.app/intake) · [Clinician dashboard](https://baymax-jet.vercel.app/clinician) · [Robot half of this project](https://github.com/KaushikSiva/baymax) · [Report a bug](../../issues)
+[Quickstart](#quickstart) · [Try the voice intake](https://baymax-jet.vercel.app/intake) · [Clinician dashboard](https://baymax-jet.vercel.app/clinician) · [Architecture](#architecture) · [Robot half of this project](https://github.com/KaushikSiva/baymax)
 
 </div>
+
+> [!IMPORTANT]
+> Baymax is a hackathon prototype, not a medical device. It charts and drafts for clinician
+> review, it does not diagnose, prescribe, or replace clinical judgment. Every differential and
+> escalation exists to be approved by a human, never acted on unreviewed.
 
 ---
 
