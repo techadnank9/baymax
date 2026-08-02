@@ -2,6 +2,9 @@
 
 # Baymax
 
+![BayMax](public/images/baymax-hero.jpg)
+
+
 **A robot that walks the floor and listens, a system that charts it to FHIR, thinks it through, and gets the doctor on the phone before anyone reaches the bedside.**
 
 [![Live app](https://img.shields.io/badge/live-baymax--jet.vercel.app-0891b2?style=for-the-badge)](https://baymax-jet.vercel.app)
