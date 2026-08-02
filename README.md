@@ -43,6 +43,13 @@ already populated. Built for the YC × Medplum Agentic Healthcare Hackathon.
 | FHIR data | Medplum (hosted, FHIR R4) |
 | Clinician UI | Next.js + `@medplum/react` |
 
+
+## Architecture
+
+Two front doors (browser mic or phone via Twilio) merge at the Deepgram Voice Agent. Tool calls fan out to moss.dev, the differential LLM, Stedi eligibility, and Medplum Bots; results land in the FHIR datastore and stream to the clinician briefing screen.
+
+![Technical architecture](docs/technical-architecture.png)
+
 ## Repo layout
 
 ```
