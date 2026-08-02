@@ -1,12 +1,37 @@
+<div align="center">
+
 # Baymax
 
 **A robot that walks the floor and listens, a system that charts it to FHIR, thinks it through, and gets the doctor on the phone before anyone reaches the bedside.**
 
-Built for the YC × Medplum Agentic Healthcare Hackathon.
+[![Live app](https://img.shields.io/badge/live-baymax--jet.vercel.app-0891b2?style=for-the-badge)](https://baymax-jet.vercel.app)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue?style=for-the-badge)](LICENSE.txt)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![FHIR R4](https://img.shields.io/badge/FHIR-R4-005EB8?style=for-the-badge)](https://www.medplum.com)
 
-[Live app](https://baymax-jet.vercel.app) · [Try the voice intake](https://baymax-jet.vercel.app/intake) · [Clinician dashboard](https://baymax-jet.vercel.app/clinician) · [Robot half of this project](https://github.com/KaushikSiva/baymax)
+Built for the **YC × Medplum Agentic Healthcare Hackathon**
+
+[Try the voice intake](https://baymax-jet.vercel.app/intake) · [Clinician dashboard](https://baymax-jet.vercel.app/clinician) · [Robot half of this project](https://github.com/KaushikSiva/baymax) · [Report a bug](../../issues)
+
+</div>
 
 ---
+
+## Contents
+
+- [The problem](#the-problem)
+- [What it does](#what-it-does)
+- [Architecture](#architecture)
+- [Sponsors](#sponsors)
+- [Stack](#stack)
+- [Live deployments](#live-deployments)
+- [Quickstart](#quickstart)
+- [Environment variables](#environment-variables)
+- [API reference](#api-reference)
+- [Repo layout](#repo-layout)
+- [Known limitations](#known-limitations)
+- [License](#license)
 
 ## The problem
 
@@ -16,12 +41,25 @@ This repo closes that gap on the digital side. A companion project, [KaushikSiva
 
 ## What it does
 
-1. A patient opens `/intake` in a browser or calls a real phone number. The voice agent asks for their name, looks them up or registers them on the spot if they're new, and starts the visit — no form, no waiting room tablet.
-2. As they describe symptoms, the agent charts each one as a real FHIR `Observation` / `Condition` / `AllergyIntolerance`, pulls relevant history through semantic search, runs a ranked differential, and checks insurance eligibility, live, mid-conversation.
-3. If it hears something that sounds urgent, it drafts a `Task` for the clinician to approve, the one autonomous action in the flow.
-4. `/clinician` shows a live per-patient dashboard: problem list, a likelihood-ranked differential chart, suggested next steps, pending Tasks with an Approve action, and verified cost.
-5. The moment the intake ends, the on-call doctor's phone rings, and it's a real conversation grounded in that patient's chart, not a recording. The doctor can ask questions and get answered; their reply is captured and shown back on the dashboard.
-6. The same doctor-call pipeline is wired to a robot dispatch endpoint (`/api/robot/monitor-event`), so a physical patrol robot reporting a critical vitals reading triggers the exact same live call.
+- [x] **Voice-driven check-in** — patient talks, in a browser or on a real phone call, no form
+- [x] **Auto-registration** — recognizes an existing patient by name or registers a new one on the spot
+- [x] **Live FHIR charting** — every symptom becomes a real `Observation` / `Condition` / `AllergyIntolerance` as it's said
+- [x] **Context-aware follow-ups** — semantic search over patient history so questions aren't generic
+- [x] **Cited differential** — a ranked, reasoned differential with suggested next steps, not a guess
+- [x] **Real-time eligibility** — insurance coverage and copay verified mid-conversation
+- [x] **Autonomous escalation** — a red-flag finding drafts a `Task` for the clinician to approve
+- [x] **Live clinician dashboard** — problem list, differential chart, pending approvals, verified cost, all polling live
+- [x] **Real doctor phone calls** — not a recording: a live Deepgram agent grounded in that patient's chart, with the doctor's spoken reply captured back onto the dashboard
+- [x] **Robot dispatch endpoint** — a physical patrol robot's critical vitals reading triggers the same live call
+
+The flow, end to end:
+
+1. A patient opens `/intake` in a browser or calls a real phone number.
+2. As they talk, the agent charts symptoms, pulls relevant history, runs a differential, and checks eligibility, live.
+3. Anything urgent drafts a `Task` for the clinician, the one autonomous action in the flow.
+4. `/clinician` shows a live per-patient dashboard the moment any of this lands.
+5. The instant the intake ends, the on-call doctor's phone rings with a real conversation, not a script.
+6. The same call pipeline answers a robot's dispatch (`/api/robot/monitor-event`) exactly the same way.
 
 ## Architecture
 
@@ -29,18 +67,63 @@ This repo closes that gap on the digital side. A companion project, [KaushikSiva
   <img src="docs/media/architecture.png" alt="Two front doors, browser and phone, merge at a single Deepgram Voice Agent WebSocket. Function calls route through Next.js API routes to moss.dev, Claude, Stedi, and Medplum Bots, all writing FHIR resources into Medplum, which the clinician screen reads live." width="100%" />
 </p>
 
-Both front doors, browser and phone, merge at one Deepgram Voice Agent socket. Everything downstream of the agent, retrieval, reasoning, eligibility, the chart itself, is one shared pipeline regardless of how the patient showed up.
+Both front doors, browser and phone, merge at one Deepgram Voice Agent socket. Everything downstream of the agent — retrieval, reasoning, eligibility, the chart itself — is one shared pipeline regardless of how the patient showed up.
 
-## Built with
+## Sponsors
 
-| | How it's used |
+Every sponsor tool here is load-bearing — it sits in the live request path, not bolted on for a badge.
+
+### [Medplum](https://www.medplum.com)
+
+The system of record. Every write in this app, from a charted symptom to a differential to a
+doctor-call transcript, is a real FHIR R4 resource, not a proprietary schema:
+
+- `Patient`, `Encounter` — identity and visit context
+- `Condition`, `Observation`, `AllergyIntolerance` — the chart, written live as the patient talks
+- `ClinicalImpression` — the cited differential
+- `Coverage` — verified eligibility and copay
+- `Task` — a drafted escalation for the clinician to approve
+- `Communication` — the doctor call's full transcript
+
+The clinician dashboard (`app/clinician/page.tsx`, `@medplum/react`) reads all of it live, so what
+the doctor sees is the same standards-compliant chart a real EHR would hold. Auth is
+client-credentials (`lib/medplum.ts`); all FHIR writes go through shared helpers in
+`lib/fhir-writes.ts`.
+
+### [Deepgram](https://deepgram.com)
+
+Runs every conversation in this app, both directions. The Voice Agent API (STT + LLM + TTS over
+one WebSocket) powers:
+
+- **Patient intake** — browser mic or a real phone call via a Twilio Media Streams bridge
+  (`phone-bridge/server.ts`), same agent, same tools, same downstream pipeline either way
+- **The doctor call** — the outbound call connects to a live Deepgram agent grounded in that
+  patient's full chart (`lib/deepgram.ts`'s `buildDoctorBriefingPrompt`), so the doctor is having
+  an actual conversation and can ask questions, not listening to a recording
+
+Settings and the six-function tool contract live in `lib/deepgram.ts`; served per-request from
+`app/api/agent-config/route.ts`.
+
+### [moss.dev](https://moss.dev)
+
+Gives the voice agent memory. Patient history is indexed once (`seed/index-moss.ts`) and queried
+mid-conversation (`app/api/tools/lookup-history/route.ts`) so the agent can ask "how's your blood
+sugar been" instead of a generic checklist — grounded in what's actually in that patient's record,
+not a script.
+
+### [Stedi](https://www.stedi.com)
+
+Real-time 270/271 insurance eligibility (`lib/stedi.ts`), called mid-conversation via
+`app/api/tools/check-eligibility/route.ts`. The verified coverage and copay get written back to
+the chart as a FHIR `Coverage` resource before the patient hangs up.
+
+### Infrastructure
+
+| | Role |
 |---|---|
-| **[Medplum](https://www.medplum.com)** | The system of record. Every write, from a charted symptom to a differential to a doctor-call transcript, is a real FHIR R4 resource (`Patient`, `Encounter`, `Condition`, `Observation`, `AllergyIntolerance`, `ClinicalImpression`, `Coverage`, `Task`, `Communication`). The clinician dashboard reads live from Medplum, so what the doctor sees is the same standards-compliant chart a real EHR would hold. |
-| **[Deepgram](https://deepgram.com)** | Runs every conversation, both directions. The Voice Agent API (STT + LLM + TTS over one socket) powers the patient intake in the browser and over the phone via a Twilio Media Streams bridge, and drives the outbound doctor call too, so the doctor is talking to a live agent grounded in the patient's chart, not a script. |
-| **[moss.dev](https://moss.dev)** | Gives the voice agent memory. A semantic search over the patient's indexed history lets it ask "how's your blood sugar been" instead of a generic checklist, grounded in what's actually in that patient's record. |
-| **[Stedi](https://www.stedi.com)** | Real-time 270/271 insurance eligibility, called mid-conversation. The verified coverage and copay get written back to the chart as a FHIR `Coverage` resource before the patient hangs up. |
-
-Plus [Twilio](https://www.twilio.com) for the phone number and Media Streams, [Vercel](https://vercel.com) for the app, and [Render](https://render.com) for the always-listening phone bridge.
+| **[Twilio](https://www.twilio.com)** | The phone number patients call, Media Streams for both inbound patient calls and outbound doctor calls |
+| **[Vercel](https://vercel.com)** | Hosts the Next.js app and every API route |
+| **[Render](https://render.com)** | Runs the phone bridge — a long-lived WebSocket process, which rules out serverless |
 
 ## Stack
 
@@ -66,6 +149,66 @@ Plus [Twilio](https://www.twilio.com) for the phone number and Media Streams, [V
 | Phone bridge (Twilio ↔ Deepgram relay) | https://baymax-phone-bridge.onrender.com |
 | Twilio number | +1 (805) 590-5092 |
 
+## Quickstart
+
+```bash
+git clone https://github.com/techadnank9/baymax.git
+cd baymax
+npm install
+cp .env.local.example .env.local   # fill in real keys, see below
+npm run dev                        # http://localhost:3000
+```
+
+The phone bridge is a separate deployable with its own `package.json` (it needs a long-lived
+WebSocket process, which rules out serverless platforms like Vercel):
+
+```bash
+cd phone-bridge
+npm install
+cp .env.example .env               # fill in real keys
+npm run dev
+```
+
+Seed a patient with real history so `/intake` and `/clinician` have something to work with:
+
+```bash
+node --env-file=.env.local --import tsx seed/create-patient.ts
+node --env-file=.env.local --import tsx seed/index-moss.ts   # indexes that history into moss.dev
+```
+
+## Environment variables
+
+See `.env.local.example` and `phone-bridge/.env.example` for the full list. Notably:
+
+| Variable | What it's for |
+|---|---|
+| `MEDPLUM_CLIENT_ID` / `MEDPLUM_CLIENT_SECRET` | Medplum client-credentials auth |
+| `DEEPGRAM_API_KEY` | Voice agent (patient intake and doctor calls) |
+| `AI_GATEWAY_KEY` | Differential-generation LLM, independent of Deepgram's own think-model key |
+| `MOSS_API_KEY` / `MOSS_PROJECT_ID` | Semantic history retrieval |
+| `STEDI_API_KEY` | Eligibility checks (falls back to a labeled stub in test mode without payer enrollment — see `lib/stedi.ts`) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | Outbound calls |
+| `DOCTOR_PHONE_NUMBER` | Who gets called on intake completion, "Call Doctor," or a robot event |
+| `PHONE_BRIDGE_WSS_URL` / `APP_BASE_URL` | Cross-service URLs for the doctor-call and phone paths |
+
+## API reference
+
+All tool routes are `POST`, JSON in and out. The voice agent calls these itself via Deepgram
+function-calling; they're also callable directly for testing or external integration (like the
+robot endpoint below).
+
+| Route | Called by | Does |
+|---|---|---|
+| `POST /api/tools/identify-patient` | Voice agent | Looks up a patient by spoken name, registers a new one if not found |
+| `POST /api/tools/chart-observation` | Voice agent | Writes a symptom/condition/allergy as a FHIR resource |
+| `POST /api/tools/lookup-history` | Voice agent | Semantic search over patient history (moss.dev) |
+| `POST /api/tools/run-differential` | Voice agent | Ranked, cited differential written as a `ClinicalImpression` |
+| `POST /api/tools/check-eligibility` | Voice agent | Real-time 270/271 eligibility check (Stedi), written as `Coverage` |
+| `POST /api/tools/flag-red-flag` | Voice agent | Drafts a `Task` for clinician approval |
+| `POST /api/notify-doctor` | Clinician dashboard, intake completion | Places a live doctor briefing call |
+| `POST /api/robot/monitor-event` | External patrol robot | Ingests vitals + incident data, charts it, calls the doctor |
+| `POST /api/admin/import` | Bulk import | Loads patients + history from a JSON payload — see `docs/import-payload-example.json` |
+
 ## Repo layout
 
 ```
@@ -89,35 +232,6 @@ phone-bridge/          standalone Node service: Twilio Media Streams <-> Deepgra
 docs/                  import payload spec/example, architecture diagram
 ```
 
-## Local development
-
-```bash
-npm install
-cp .env.local.example .env.local   # fill in real keys
-npm run dev                        # http://localhost:3000
-```
-
-`phone-bridge/` is a separate deployable with its own `package.json`:
-
-```bash
-cd phone-bridge
-npm install
-cp .env.example .env               # fill in real keys
-npm run dev
-```
-
-## Environment variables
-
-See `.env.local.example` and `phone-bridge/.env.example` for the full list. Notably:
-
-- `AI_GATEWAY_KEY` — differential-generation LLM (independent of Deepgram's own think-model key)
-- `MOSS_API_KEY` / `MOSS_PROJECT_ID` — semantic history retrieval
-- `STEDI_API_KEY` — eligibility checks (currently falls back to a labeled stub in test mode; see
-  `lib/stedi.ts` for why)
-- `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` — outbound calls
-- `DOCTOR_PHONE_NUMBER` — who gets called on intake completion, "Call Doctor," or a robot event
-- `PHONE_BRIDGE_WSS_URL` / `APP_BASE_URL` — cross-service URLs for the doctor-call and phone paths
-
 ## Known limitations
 
 Said plainly, because a demo that hides its edges is less useful than one that names them:
@@ -130,3 +244,7 @@ Said plainly, because a demo that hides its edges is less useful than one that n
   request to Medplum), so the clinician dashboard polls every 3s instead of updating via push.
 - **Render free tier** spins the phone bridge down after inactivity; the first call after an idle
   stretch can be slow enough to cold-start that it misses Twilio's connection window.
+
+## License
+
+Apache License 2.0 — see [`LICENSE.txt`](LICENSE.txt).
