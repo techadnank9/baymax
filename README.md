@@ -2,6 +2,8 @@
 
 # Baymax
 
+![BayMax](public/images/baymax-hero.jpg)
+
 **Pre-visit briefing**<br />
 A voice agent that charts intake straight to FHIR, thinks through a differential, and gets the doctor on the phone.<br />
 An agentic healthcare build powered by Deepgram, Medplum, moss.dev, and Stedi.
